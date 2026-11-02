@@ -34,3 +34,6 @@ Thumbs.db
 !.env.example
 !database/setup_hospital_db.sql
 !presentation.html
+
+# TypeScript incremental build cache
+*.tsbuildinfo
