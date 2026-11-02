@@ -9,7 +9,9 @@ import {
   CheckCircle2,
   Clock,
   Gauge,
+  Lock,
   Receipt,
+  Siren,
   Sparkles,
   Stethoscope,
   Wind,
@@ -28,7 +30,7 @@ export interface BedData {
   has_ventilator: boolean;
   has_oxygen_port: boolean;
   daily_tariff: number | string;
-  operational_status: 'Available' | 'Occupied' | 'Sanitizing' | 'Out-Of-Service';
+  operational_status: 'Available' | 'Occupied' | 'Sanitizing' | 'Out-Of-Service' | 'Reserved';
   dept_code: string;
   dept_name: string;
   floor_number: number;
@@ -44,6 +46,25 @@ export interface BedData {
   doctor_id?: number | null;
   doctor_name?: string | null;
   doctor_specialization?: string | null;
+  // ambulance hold (status 'Reserved')
+  hold_id?: number | null;
+  hold_alert_code?: string | null;
+  hold_ambulance?: string | null;
+  hold_until?: string | null;
+  hold_eta?: string | null;
+  hold_esi?: number | null;
+  hold_complaint?: string | null;
+  hold_origin?: string | null;
+  // privacy (row-level security)
+  patient_privacy?: 'standard' | 'restricted' | null;
+  restriction_reason?: string | null;
+  is_protected?: boolean;
+  // predicted discharge from real length-of-stay data
+  condition_name?: string | null;
+  expected_los_days?: number | string | null;
+  expected_discharge_at?: string | null;
+  late_discharge_at?: string | null;
+  benchmark_cases?: number | null;
 }
 
 interface BedCardProps {
@@ -56,8 +77,32 @@ export const STATUS_RGB: Record<string, string> = {
   Available: '52,211,153',
   Occupied: '251,113,133',
   Sanitizing: '251,191,36',
+  Reserved: '56,189,248',
   'Out-Of-Service': '148,163,184',
 };
+
+/** "in 2h 10m" / "3 min ago" relative to now. */
+export function relTime(iso?: string | null, now = Date.now()) {
+  if (!iso) return '';
+  const diff = new Date(iso).getTime() - now;
+  const m = Math.round(Math.abs(diff) / 60000);
+  const txt = m >= 1440 ? `${Math.floor(m / 1440)}d ${Math.floor((m % 1440) / 60)}h` : m >= 60 ? `${Math.floor(m / 60)}h ${m % 60}m` : `${m} min`;
+  return diff >= 0 ? `in ${txt}` : `${txt} ago`;
+}
+
+/** Live countdown text for an ambulance ETA. */
+function useCountdown(iso?: string | null) {
+  const [now, setNow] = useState(Date.now());
+  React.useEffect(() => {
+    if (!iso) return;
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, [iso]);
+  if (!iso) return null;
+  const s = Math.round((new Date(iso).getTime() - now) / 1000);
+  const a = Math.abs(s);
+  return { overdue: s < 0, text: `${s < 0 ? '+' : ''}${String(Math.floor(a / 60)).padStart(2, '0')}:${String(a % 60).padStart(2, '0')}` };
+}
 
 const stayTime = (timeStr?: string | null) => {
   if (!timeStr) return '';
@@ -81,6 +126,9 @@ export default function BedCard({ bed, onStatusChange, highlight }: BedCardProps
   const occupied = bed.operational_status === 'Occupied';
   const critical = occupied && bed.triage_priority === 1;
   const t = triage(bed.triage_priority);
+  const reserved = bed.operational_status === 'Reserved';
+  const eta = useCountdown(reserved ? bed.hold_eta : null);
+  const restricted = bed.patient_privacy === 'restricted';
 
   const restore = async () => {
     if (!onStatusChange) return;
@@ -123,6 +171,14 @@ export default function BedCard({ bed, onStatusChange, highlight }: BedCardProps
           </div>
         )}
         {bed.operational_status === 'Out-Of-Service' && <div aria-hidden className="hazard absolute inset-0" />}
+        {reserved && (
+          <motion.div
+            aria-hidden
+            className="pointer-events-none absolute inset-0 rounded-2xl border-2 border-sky-400/50"
+            animate={{ opacity: [0.15, 0.8, 0.15] }}
+            transition={{ duration: 1.1, repeat: Infinity }}
+          />
+        )}
 
         <div className="relative flex-1 p-4 sm:p-5">
           {/* Header */}
@@ -173,7 +229,21 @@ export default function BedCard({ bed, onStatusChange, highlight }: BedCardProps
 
           {/* Body */}
           <div className="mt-4 border-t border-tint/[0.11] pt-3.5">
-            {occupied && (
+            {occupied && bed.is_protected && (
+              <div className="flex items-center gap-3 py-2">
+                <div className="flex h-11 w-11 items-center justify-center rounded-xl border border-plasma-400/40 bg-plasma-500/10">
+                  <Lock className="h-4 w-4 text-plasma-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-fg">Protected record</p>
+                  <p className="text-[11px] leading-snug text-fg3">
+                    PostgreSQL row-level security hides this patient from your role. Use break-glass if a life is at risk.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {occupied && !bed.is_protected && (
               <div className="space-y-2.5">
                 <div className="flex items-center gap-3">
                   <div
@@ -188,6 +258,14 @@ export default function BedCard({ bed, onStatusChange, highlight }: BedCardProps
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       <span className="truncate text-sm font-semibold text-fg">{bed.patient_name || 'Inpatient'}</span>
+                      {restricted && (
+                        <span
+                          title={bed.restriction_reason || 'Restricted record'}
+                          className="inline-flex items-center gap-0.5 rounded border border-plasma-400/40 bg-plasma-500/10 px-1 font-mono text-[9.5px] font-bold text-plasma-400"
+                        >
+                          <Lock className="h-2.5 w-2.5" /> RLS
+                        </span>
+                      )}
                       {bed.patient_blood_group && (
                         <span className="rounded border border-rose-400/30 bg-rose-500/10 px-1 font-mono text-[9.5px] font-bold text-rose-300">
                           {bed.patient_blood_group}
@@ -221,10 +299,57 @@ export default function BedCard({ bed, onStatusChange, highlight }: BedCardProps
                   </p>
                 )}
                 {bed.admission_time && (
-                  <div className="flex items-center gap-1 font-mono text-[10.5px] text-fg3">
-                    <Clock className="h-3 w-3" /> LOS {stayTime(bed.admission_time)}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[10.5px] text-fg3">
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3 w-3" /> LOS {stayTime(bed.admission_time)}
+                    </span>
+                    {bed.expected_discharge_at && (
+                      <span
+                        className="text-pulse-300/90"
+                        title={`Median stay for ${bed.condition_name} across ${bed.benchmark_cases} real hospital stays (NY SPARCS 2021)`}
+                      >
+                        {new Date(bed.expected_discharge_at).getTime() > Date.now()
+                          ? `likely free ${relTime(bed.expected_discharge_at)}`
+                          : `past typical stay (${Number(bed.expected_los_days)}d median)`}
+                      </span>
+                    )}
                   </div>
                 )}
+              </div>
+            )}
+
+            {reserved && (
+              <div className="space-y-2.5">
+                <div className="flex items-center gap-3">
+                  <div className="relative flex h-11 w-11 items-center justify-center">
+                    <span className="absolute inset-0 animate-ping2 rounded-full bg-sky-400/20" />
+                    <span className="absolute inset-0 rounded-full border border-sky-400/50" />
+                    <Siren className="h-5 w-5 text-sky-300" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-semibold text-sky-100">Held for ambulance {bed.hold_alert_code}</p>
+                    <p className="truncate font-mono text-[10.5px] text-fg3">
+                      {bed.hold_ambulance} · from {bed.hold_origin}
+                    </p>
+                  </div>
+                  {eta && (
+                    <div className="text-right">
+                      <div className={`font-mono text-base font-bold tabular-nums ${eta.overdue ? 'text-rose-300' : 'text-sky-200'}`}>
+                        {eta.text}
+                      </div>
+                      <div className="font-mono text-[9px] uppercase tracking-wider text-fg3">{eta.overdue ? 'overdue' : 'ETA'}</div>
+                    </div>
+                  )}
+                </div>
+                {(bed.hold_esi || bed.hold_complaint) && (
+                  <div className="flex items-center gap-2">
+                    {bed.hold_esi ? <TriageBadge priority={bed.hold_esi} size="sm" /> : null}
+                    {bed.hold_complaint && <span className="truncate text-[11.5px] italic text-fg2">“{bed.hold_complaint}”</span>}
+                  </div>
+                )}
+                <p className="font-mono text-[10px] text-fg3">
+                  hold ends {relTime(bed.hold_until)} · tsrange expires by itself
+                </p>
               </div>
             )}
 
@@ -289,7 +414,21 @@ export default function BedCard({ bed, onStatusChange, highlight }: BedCardProps
               <ArrowUpRight className="h-3.5 w-3.5 transition-transform group-hover/btn:-translate-y-0.5 group-hover/btn:translate-x-0.5" />
             </Link>
           )}
-          {occupied && (
+          {reserved && (
+            <Link
+              href="/ambulance"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-sky-400/35 bg-sky-500/10 px-3 py-2 text-xs font-semibold text-sky-100 transition hover:bg-sky-500/20"
+            >
+              <Siren className="h-3.5 w-3.5" />
+              Open Golden Hour desk
+            </Link>
+          )}
+          {occupied && bed.is_protected && (
+            <div className="flex w-full items-center justify-center gap-2 rounded-xl border border-plasma-400/25 bg-plasma-500/[0.07] px-3 py-2 text-xs font-semibold text-plasma-400">
+              <Lock className="h-3.5 w-3.5" /> Restricted to the care team
+            </div>
+          )}
+          {occupied && !bed.is_protected && (
             <Link
               href={`/billing?admission_id=${bed.admission_id}`}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-rose-400/30 bg-rose-500/10 px-3 py-2 text-xs font-semibold text-rose-100 transition hover:bg-rose-500/20"

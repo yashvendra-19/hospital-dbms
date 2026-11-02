@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { asStaff } from '@/lib/db';
+import { dbError } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,13 +48,10 @@ export async function GET(request: NextRequest) {
       ORDER BY doc.is_on_duty DESC, doc.full_name ASC
     `;
 
-    const { rows } = await query(sql, params);
+    const rows = await asStaff(auth, async (db) => (await db.query(sql, params)).rows);
 
     return NextResponse.json({ success: true, doctors: rows });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch doctors' },
-      { status: 500 }
-    );
+    return dbError(error, 'Failed to fetch doctors', auth);
   }
 }

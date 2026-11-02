@@ -8,6 +8,7 @@ import Aurora from './fx/Aurora';
 import ClickSpark from './fx/ClickSpark';
 import EcgLine from './fx/EcgLine';
 import { ToastProvider } from './ToastContext';
+import { LiveProvider } from './LiveContext';
 import { ClientSession, SessionContext } from './auth/SessionContext';
 
 /** Shared chrome for every page: backdrop, session gate, navigation, toasts, footer. */
@@ -83,6 +84,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         ) : (
           <SessionContext.Provider value={{ session, logout }}>
+            <LiveProvider>
             <div className="relative flex min-h-screen flex-col">
               <Navbar />
               <main className="flex-1 pb-32">{children}</main>
@@ -91,12 +93,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <span>
                     <span className="font-display font-semibold text-fg2">Hospital Bed & Emergency Resource Management</span>
                     <span className="mx-2 text-fg3">/</span>
-                    PostgreSQL · PL/pgSQL · Next.js
+                    PostgreSQL · PL/pgSQL · RLS · LISTEN/NOTIFY · Next.js
                   </span>
-                  <span className="font-mono text-[10.5px] text-fg3">hospital_db @ localhost:5432 · pg pool (20)</span>
+                  <span className="font-mono text-[10.5px] text-fg3">
+                    Real data: National Hospital Directory (Govt. of India) · NY SPARCS 2021 · India Post pincodes
+                  </span>
                 </div>
               </footer>
             </div>
+            </LiveProvider>
           </SessionContext.Provider>
         )}
       </ToastProvider>

@@ -23,8 +23,14 @@ export interface InpatientBillingItem {
   billable_days: number;
   actual_days_elapsed: number;
   estimated_bed_charges: number;
-  admission_diagnosis: string;
+  admission_diagnosis: string | null;
   triage_priority?: number;
+  estimate_code?: string | null;
+  est_low_inr?: number | string | null;
+  est_typical_inr?: number | string | null;
+  est_high_inr?: number | string | null;
+  estimate_condition?: string | null;
+  estimate_explained_to?: string | null;
 }
 
 interface DischargeModalProps {
@@ -165,7 +171,7 @@ export default function DischargeModal({ isOpen, onClose, inpatient, onDischarge
                     <Info
                       label="Physician"
                       value={inpatient.doctor_name}
-                      sub={inpatient.admission_diagnosis}
+                      sub={inpatient.admission_diagnosis ?? "Diagnosis hidden: no column grant for billing"}
                       icon={<Stethoscope className="h-3 w-3" />}
                     />
                   </div>
@@ -299,6 +305,16 @@ export default function DischargeModal({ isOpen, onClose, inpatient, onDischarge
                           )}
                         </AnimatePresence>
                       </div>
+                      {inpatient.estimate_code && (
+                        <EstimateCompare
+                          code={inpatient.estimate_code}
+                          low={Number(inpatient.est_low_inr)}
+                          high={Number(inpatient.est_high_inr)}
+                          actual={grossAmount}
+                          condition={inpatient.estimate_condition}
+                          to={inpatient.estimate_explained_to}
+                        />
+                      )}
                       <div className="mt-5 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.07] p-4">
                         <div className="font-mono text-[10px] uppercase tracking-[0.2em] text-emerald-300/80">Net patient payable</div>
                         <CountUp
@@ -417,6 +433,23 @@ export default function DischargeModal({ isOpen, onClose, inpatient, onDischarge
                       />
                     </div>
                   </div>
+                  {completedInvoice.estimate && (
+                    <EstimateCompare
+                      code={completedInvoice.estimate.estimate_code}
+                      low={Number(completedInvoice.estimate.est_low_inr)}
+                      high={Number(completedInvoice.estimate.est_high_inr)}
+                      actual={Number(completedInvoice.gross_amount)}
+                    />
+                  )}
+                  {completedInvoice.seal_hash && (
+                    <div className="rounded-lg border border-plasma-400/25 bg-plasma-500/[0.06] p-2.5 text-[11px] text-fg2">
+                      <div className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-plasma-400">Audit seal (SHA-256 chain)</div>
+                      <div className="mt-0.5 font-mono text-fg">
+                        #{completedInvoice.seal_seq} · {String(completedInvoice.seal_hash).slice(0, 16)}…
+                      </div>
+                      <div className="text-[10px] text-fg3">Anyone can check this seal on the Integrity Ledger page. Editing the bill later breaks it.</div>
+                    </div>
+                  )}
                   <div className="rounded-lg bg-tint/[0.04] p-2 text-center text-xs text-fg2">
                     Status: <span className="font-semibold text-emerald-300">{completedInvoice.payment_status}</span>
                     {completedInvoice.settled_at && ` · settled ${new Date(completedInvoice.settled_at).toLocaleTimeString()}`}
@@ -503,6 +536,32 @@ function Row({ label, value, strong, tone }: { label: string; value: number; str
         {value < 0 ? '− ' : ''}
         {inr(Math.abs(value))}
       </span>
+    </div>
+  );
+}
+
+
+/** Final bill against the range the family was given at admission. */
+function EstimateCompare({ code, low, high, actual, condition, to }: { code: string; low: number; high: number; actual: number; condition?: string | null; to?: string | null }) {
+  const within = actual >= low && actual <= high;
+  const tone = within ? 'emerald' : actual > high ? 'rose' : 'sky';
+  const max = Math.max(high * 1.25, actual * 1.05, 1);
+  return (
+    <div className={`mt-4 rounded-xl border p-3 text-[11px] ${within ? 'border-emerald-400/25 bg-emerald-400/[0.05]' : tone === 'rose' ? 'border-rose-400/30 bg-rose-500/[0.06]' : 'border-sky-400/30 bg-sky-500/[0.06]'}`}>
+      <div className="flex items-center justify-between">
+        <span className="font-mono text-[9.5px] uppercase tracking-[0.18em] text-fg3">Estimate {code}</span>
+        <span className={`font-semibold ${within ? 'text-emerald-300' : tone === 'rose' ? 'text-rose-300' : 'text-sky-300'}`}>
+          {within ? 'Within the range given' : actual > high ? 'Above the range given' : 'Below the range given'}
+        </span>
+      </div>
+      <div className="relative mt-2 h-2 rounded-full bg-tint/[0.08]">
+        <div className="absolute inset-y-0 rounded-full bg-gradient-to-r from-pulse-400/70 to-plasma-500/70" style={{ left: `${(low / max) * 100}%`, width: `${((high - low) / max) * 100}%` }} />
+        <div className="absolute -top-1 h-4 w-1 rounded bg-white" style={{ left: `${Math.min(99, (actual / max) * 100)}%` }} />
+      </div>
+      <div className="mt-1.5 text-fg2">
+        ₹{low.toLocaleString('en-IN')} – ₹{high.toLocaleString('en-IN')} promised{condition ? ` for ${condition}` : ''}
+        {to ? `, explained to ${to}` : ''}. Bill now ₹{Math.round(actual).toLocaleString('en-IN')}.
+      </div>
     </div>
   );
 }

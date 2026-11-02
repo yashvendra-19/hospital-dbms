@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth';
-import { query } from '@/lib/db';
-import { formatPgError } from '@/lib/db-errors';
+import { asStaff } from '@/lib/db';
+import { dbError, HttpError } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +23,8 @@ export async function GET(request: NextRequest) {
         p.primary_phone,
         p.emergency_contact_name,
         p.emergency_contact_phone,
+        p.privacy_level,
+        p.restriction_reason,
         (
           SELECT a.admission_id 
           FROM admissions a 
@@ -40,13 +42,11 @@ export async function GET(request: NextRequest) {
 
     sql += ` ORDER BY p.patient_id DESC`;
 
-    const { rows } = await query(sql, params);
+    // Row-level security decides which patients come back (restricted records only for the care team)
+    const rows = await asStaff(auth, async (db) => (await db.query(sql, params)).rows);
     return NextResponse.json({ success: true, patients: rows });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch patients' },
-      { status: 500 }
-    );
+    return dbError(error, 'Failed to fetch patients', auth);
   }
 }
 
@@ -64,7 +64,13 @@ export async function POST(request: NextRequest) {
       primary_phone,
       emergency_contact_name,
       emergency_contact_phone,
+      privacy_level,
+      restriction_reason,
     } = body;
+    const restricted = privacy_level === 'restricted';
+    if (restricted && (!restriction_reason || String(restriction_reason).trim().length < 3)) {
+      throw new HttpError(400, 'Give a reason for restricting this record (for example: medico-legal case).');
+    }
 
     // Basic front validation
     if (!national_health_id || !full_name || !gender || !dob || !blood_group || !primary_phone) {
@@ -102,8 +108,10 @@ export async function POST(request: NextRequest) {
         blood_group,
         primary_phone,
         emergency_contact_name,
-        emergency_contact_phone
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        emergency_contact_phone,
+        privacy_level,
+        restriction_reason
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
       RETURNING *
     `;
 
@@ -116,9 +124,12 @@ export async function POST(request: NextRequest) {
       sanitizedPhone,
       emergency_contact_name ? emergency_contact_name.trim() : null,
       sanitizedEmergencyPhone,
+      restricted ? 'restricted' : 'standard',
+      restricted ? String(restriction_reason).trim().slice(0, 80) : null,
     ];
 
-    const { rows } = await query(sql, params);
+    // RLS policy pol_patients_register: only doctors and admins may create restricted records
+    const rows = await asStaff(auth, async (db) => (await db.query(sql, params)).rows);
 
     return NextResponse.json(
       {
@@ -129,14 +140,6 @@ export async function POST(request: NextRequest) {
       { status: 201 }
     );
   } catch (error: any) {
-    const formatted = formatPgError(error);
-    return NextResponse.json(
-      {
-        success: false,
-        error: formatted.message,
-        details: formatted,
-      },
-      { status: formatted.isConstraintError ? 409 : 500 }
-    );
+    return dbError(error, 'Failed to register patient', auth);
   }
 }

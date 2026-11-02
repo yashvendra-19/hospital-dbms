@@ -5,7 +5,9 @@ import dynamic from 'next/dynamic';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   AlertTriangle,
+  Ambulance,
   BedDouble,
+  Lock,
   HeartPulse,
   MousePointerClick,
   PlusCircle,
@@ -22,6 +24,8 @@ import SplitText from '@/components/fx/SplitText';
 import MovingBorder from '@/components/fx/MovingBorder';
 import Segmented from '@/components/fx/Segmented';
 import { GhostButton } from '@/components/PageHeader';
+import { useLive } from '@/components/LiveContext';
+import Link from 'next/link';
 
 const HospitalTower = dynamic(() => import('@/components/three/HospitalTower'), {
   ssr: false,
@@ -37,10 +41,11 @@ function TowerLoading() {
   );
 }
 
-type StatusFilter = 'all' | 'Available' | 'Occupied' | 'Sanitizing' | 'Out-Of-Service';
+type StatusFilter = 'all' | 'Available' | 'Occupied' | 'Reserved' | 'Sanitizing' | 'Out-Of-Service';
 
 export default function DashboardPage() {
   const { toast } = useToast();
+  const { tick } = useLive();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -99,6 +104,12 @@ export default function DashboardPage() {
     return () => clearTimeout(t);
   }, [fetchData, searchQuery]);
 
+  // PostgreSQL pushed a change (ambulance, bed hold, admission, bed status): refresh quietly
+  useEffect(() => {
+    if (tick > 0) fetchData(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tick]);
+
   // Scroll to a bed picked in the 3D tower
   useEffect(() => {
     if (focusBed === null) return;
@@ -149,6 +160,7 @@ export default function DashboardPage() {
       { value: 'all' as StatusFilter, label: <>All <Count n={stats?.totalBeds} /></> },
       { value: 'Available' as StatusFilter, label: <>Available <Count n={stats?.availableBeds} /></>, glow: '52,211,153' },
       { value: 'Occupied' as StatusFilter, label: <>Occupied <Count n={stats?.occupiedBeds} /></>, glow: '251,113,133' },
+      { value: 'Reserved' as StatusFilter, label: <>Ambulance hold <Count n={stats?.reservedBeds} /></>, glow: '56,189,248' },
       { value: 'Sanitizing' as StatusFilter, label: <>Sanitizing <Count n={stats?.sanitizingBeds} /></>, glow: '251,191,36' },
       { value: 'Out-Of-Service' as StatusFilter, label: <>Out of service <Count n={stats?.oosBeds} /></>, glow: '148,163,184' },
     ],
@@ -197,8 +209,9 @@ export default function DashboardPage() {
             transition={{ delay: 0.5 }}
             className="mt-4 max-w-md text-sm leading-relaxed text-fg2"
           >
-            A real-time 3D twin of the hospital. Each floor is a department, each pod a physical bed — colour-coded by
-            operational status and pulsing with the patient&apos;s triage acuity.
+            A real-time 3D twin of the hospital. Each floor is a department, each pod a physical bed, colour-coded by
+            status and pulsing with the patient&apos;s triage acuity. Beds held for incoming ambulances strobe blue, and
+            PostgreSQL pushes every change to this screen as it happens.
           </motion.p>
 
           <motion.div
@@ -216,6 +229,55 @@ export default function DashboardPage() {
               {refreshing ? 'Syncing…' : 'Refresh'}
             </GhostButton>
           </motion.div>
+
+          <AnimatePresence>
+            {stats?.incomingAmbulances > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 10, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: 'auto' }}
+                exit={{ opacity: 0, height: 0 }}
+                className="mt-6 overflow-hidden"
+              >
+                <Link
+                  href="/ambulance"
+                  className="relative flex items-center gap-3 overflow-hidden rounded-xl border border-sky-400/35 bg-sky-500/[0.09] px-4 py-3 transition hover:bg-sky-500/[0.14]"
+                >
+                  <motion.div
+                    aria-hidden
+                    className="absolute inset-y-0 w-24 bg-gradient-to-r from-transparent via-sky-300/20 to-transparent"
+                    animate={{ x: ['-120%', '520%'] }}
+                    transition={{ duration: 1.8, repeat: Infinity, ease: 'linear' }}
+                  />
+                  <Ambulance className="h-5 w-5 flex-shrink-0 text-sky-300" />
+                  <div className="text-xs">
+                    <span className="font-semibold text-sky-100">
+                      {stats.incomingAmbulances} ambulance{stats.incomingAmbulances > 1 ? 's' : ''} inbound
+                    </span>
+                    <span className="ml-2 font-mono text-sky-300/80">
+                      {stats.reservedBeds} bed{stats.reservedBeds === 1 ? '' : 's'} on timed hold
+                    </span>
+                  </div>
+                </Link>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <AnimatePresence>
+            {stats?.protectedInpatients > 0 && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="mt-3 overflow-hidden">
+                <Link
+                  href="/privacy"
+                  className="flex items-center gap-3 rounded-xl border border-plasma-400/25 bg-plasma-500/[0.07] px-4 py-2.5 text-xs text-fg2 transition hover:bg-plasma-500/[0.12]"
+                >
+                  <Lock className="h-4 w-4 flex-shrink-0 text-plasma-400" />
+                  <span>
+                    <b className="text-fg">{stats.protectedInpatients} restricted record{stats.protectedInpatients > 1 ? 's' : ''}</b>{' '}
+                    hidden from your role by PostgreSQL row-level security. Counts below exclude them.
+                  </span>
+                </Link>
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <AnimatePresence>
             {critical > 0 && (
@@ -269,6 +331,7 @@ export default function DashboardPage() {
                 ['Available', '#34d399'],
                 ['Occupied', '#fb7185'],
                 ['Sanitizing', '#fbbf24'],
+                ['Ambulance hold', '#38bdf8'],
                 ['ESI-1 beacon', '#ff3b5c'],
               ].map(([l, c]) => (
                 <span key={l} className="flex items-center gap-2 text-[10.5px] text-fg2">
@@ -290,7 +353,7 @@ export default function DashboardPage() {
           index={0}
           title="Total physical beds"
           value={stats?.totalBeds}
-          subtitle={`${stats?.availableBeds ?? 0} sanitized & ready`}
+          subtitle={`${stats?.availableBeds ?? 0} ready · ${stats?.reservedBeds ?? 0} held for ambulances`}
           icon={BedDouble}
           variant="blue"
           badge={`${stats?.occupancyRate ?? 0}% occupied`}
@@ -318,12 +381,16 @@ export default function DashboardPage() {
         />
         <MetricCard
           index={3}
-          title="Critical triage"
-          value={stats?.criticalTriageCount}
-          subtitle={`ESI 1: ${stats?.esi1Resus ?? 0} · ESI 2: ${stats?.esi2Emergent ?? 0}`}
-          icon={AlertTriangle}
+          title={stats?.clinicalView === false ? 'Incoming ambulances' : 'Critical triage'}
+          value={stats?.clinicalView === false ? stats?.reservedBeds : stats?.criticalTriageCount}
+          subtitle={
+            stats?.clinicalView === false
+              ? 'Triage is clinical data: hidden from billing by column grants'
+              : `ESI 1: ${stats?.esi1Resus ?? 0} · ESI 2: ${stats?.esi2Emergent ?? 0} · ${stats?.incomingAmbulances ?? 0} inbound`
+          }
+          icon={stats?.clinicalView === false ? Ambulance : AlertTriangle}
           variant={critical > 0 ? 'amber' : 'slate'}
-          badge="High alert"
+          badge={stats?.clinicalView === false ? 'Beds on hold' : 'High alert'}
         />
       </section>
 

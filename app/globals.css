@@ -95,7 +95,7 @@ select option {
     background-image: linear-gradient(100deg, #7af7ff 0%, #2ee6f5 40%, #6b8cff 75%, #9474ff 100%);
   }
   .chip {
-    @apply inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold;
+    @apply inline-flex items-center gap-1 whitespace-nowrap rounded-full border px-2 py-0.5 text-[11px] font-semibold;
   }
   /* ECG chart paper: 1 mm minor and 5 mm major grid */
   .ecg-paper {

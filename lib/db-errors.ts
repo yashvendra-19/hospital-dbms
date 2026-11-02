@@ -20,6 +20,48 @@ export function formatPgError(error: any): FormattedDbError {
   const constraint = error.constraint;
   const detail = error.detail || error.message;
 
+  // PostgreSQL 42501: insufficient_privilege (column/table grants and row-level security)
+  if (code === '42501') {
+    const rls = /row-level security/i.test(error.message || '');
+    const table = (error.message || '').match(/(?:table|relation) "?([a-z_]+)"?/i)?.[1];
+    return {
+      isConstraintError: false,
+      code,
+      title: rls ? 'Blocked by a row-level security policy' : 'Blocked by PostgreSQL permissions',
+      message: rls
+        ? `PostgreSQL refused to save this row: a row-level security policy on ${table || 'this table'} does not allow it for your role.`
+        : `PostgreSQL refused this request for your role (${error.message}). Access is enforced by the database, not just the screen.`,
+      detail,
+    };
+  }
+
+  // Bed promised to an incoming ambulance (trg_admission_hold_guard)
+  if (constraint === 'ex_bed_held_for_ambulance') {
+    return {
+      isConstraintError: true,
+      constraintName: constraint,
+      code,
+      title: 'Bed Held for an Incoming Ambulance',
+      message: `${error.message} Pick another bed, or receive the ambulance from the Golden Hour desk.`,
+      detail,
+    };
+  }
+
+  // Two ambulances promised the same bed (bed_holds exclusion constraint)
+  if (constraint === 'ex_no_double_bed_hold' || constraint === 'chk_hold_bed_free') {
+    return {
+      isConstraintError: true,
+      constraintName: constraint,
+      code,
+      title: 'Bed Hold Conflict',
+      message:
+        constraint === 'ex_no_double_bed_hold'
+          ? 'Another ambulance already holds this bed for an overlapping time window (exclusion constraint ex_no_double_bed_hold).'
+          : 'This bed is not free for the whole hold window.',
+      detail,
+    };
+  }
+
   // PostgreSQL 23P01: exclusion_violation (e.g. ex_no_double_bed_booking)
   if (code === '23P01' || constraint === 'ex_no_double_bed_booking') {
     return {

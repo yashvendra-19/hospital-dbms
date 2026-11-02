@@ -2,6 +2,7 @@
 
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
+import CostEstimatePanel, { EMPTY_ESTIMATE, EstimateChoice, severityFromEsi } from '@/components/CostEstimatePanel';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   BedDouble,
@@ -40,6 +41,8 @@ function AdmissionsContent() {
   const [showAllBedsForTesting, setShowAllBedsForTesting] = useState(false);
   const [isPatientModalOpen, setIsPatientModalOpen] = useState(false);
   const [celebrate, setCelebrate] = useState(0);
+  const [estimate, setEstimate] = useState<EstimateChoice>(EMPTY_ESTIMATE);
+  const [severityTouched, setSeverityTouched] = useState(false);
 
   const [formData, setFormData] = useState({
     patient_id: '',
@@ -114,6 +117,18 @@ function AdmissionsContent() {
           admitting_doctor_id: parseInt(formData.admitting_doctor_id, 10),
           triage_priority: formData.triage_priority,
           admission_diagnosis: formData.admission_diagnosis.trim(),
+          ...(estimate.condition_id
+            ? {
+                condition_id: parseInt(estimate.condition_id, 10),
+                apr_severity: estimate.severity,
+                estimate: {
+                  scheme_code: estimate.scheme_code,
+                  cover_remaining: estimate.cover_remaining,
+                  explained_to: estimate.explained_to,
+                  relation: estimate.relation,
+                },
+              }
+            : {}),
         }),
       });
       const data = await res.json();
@@ -122,6 +137,7 @@ function AdmissionsContent() {
         const errDetails = data.details || {};
         const isDoubleBooking =
           errDetails.constraintName === 'ex_no_double_bed_booking' ||
+          errDetails.constraintName === 'ex_bed_held_for_ambulance' ||
           errDetails.code === '23P01' ||
           data.code === 'PATIENT_ALREADY_ADMITTED';
         toast({
@@ -132,7 +148,11 @@ function AdmissionsContent() {
         });
         setAlertDialog({
           isOpen: true,
-          title: isDoubleBooking
+          title: data.code === 'DB_FORBIDDEN'
+            ? `Blocked by PostgreSQL for the ${data.role} role (${data.dbRole})`
+            : errDetails.constraintName === 'ex_bed_held_for_ambulance'
+            ? 'Bed held for an incoming ambulance [trg_admission_hold_guard]'
+            : isDoubleBooking
             ? 'PostgreSQL Exclusion Constraint Violation [ex_no_double_bed_booking]'
             : 'Admission Database Conflict',
           message:
@@ -146,8 +166,12 @@ function AdmissionsContent() {
       toast({
         type: 'success',
         title: 'Patient Successfully Admitted',
-        message: `${data.admission.patient_name} admitted to Room ${data.admission.room_number} (${data.admission.bed_label}) under ${data.admission.doctor_name}.`,
+        message: `${data.admission.patient_name} admitted to Room ${data.admission.room_number} (${data.admission.bed_label}) under ${data.admission.doctor_name}.${
+          data.estimate ? ` Estimate ${data.estimate.estimate_code} saved: ₹${Number(data.estimate.est_low_inr).toLocaleString('en-IN')}–₹${Number(data.estimate.est_high_inr).toLocaleString('en-IN')}.` : ''
+        }`,
       });
+      setEstimate(EMPTY_ESTIMATE);
+      setSeverityTouched(false);
       setCelebrate((c) => c + 1);
       setFormData({
         patient_id: '',
@@ -174,6 +198,10 @@ function AdmissionsContent() {
   ];
   const progress = steps.filter(Boolean).length / steps.length;
   const selectedBed = beds.find((b) => String(b.bed_id) === String(formData.bed_id));
+  const selectedPatient = patients.find((p) => String(p.patient_id) === String(formData.patient_id));
+  const selectedPatientIsChild = selectedPatient
+    ? new Date(selectedPatient.dob) > new Date(new Date().setFullYear(new Date().getFullYear() - 18))
+    : null;
 
   return (
     <div className="mx-auto max-w-7xl px-4 pt-8 sm:px-6">
@@ -360,7 +388,10 @@ function AdmissionsContent() {
                         type="button"
                         whileHover={{ y: -3 }}
                         whileTap={{ scale: 0.94 }}
-                        onClick={() => setFormData({ ...formData, triage_priority: Number(lvl) })}
+                        onClick={() => {
+                          setFormData({ ...formData, triage_priority: Number(lvl) });
+                          if (!severityTouched) setEstimate((est) => ({ ...est, severity: severityFromEsi(Number(lvl)) }));
+                        }}
                         className="relative flex flex-col items-center gap-1.5 rounded-xl border border-tint/[0.12] py-3"
                         style={active ? { borderColor: `rgba(${cfg.rgb},0.7)` } : undefined}
                       >
@@ -397,7 +428,7 @@ function AdmissionsContent() {
                 </motion.p>
               </Step>
 
-              <Step n={5} done={steps[4]} title="Diagnosis & clinical notes" last>
+              <Step n={5} done={steps[4]} title="Diagnosis & clinical notes">
                 <textarea
                   required
                   rows={3}
@@ -405,6 +436,25 @@ function AdmissionsContent() {
                   onChange={(e) => setFormData({ ...formData, admission_diagnosis: e.target.value })}
                   placeholder="e.g. Acute ST-elevation myocardial infarction (STEMI), diaphoresis and radiating chest pain…"
                   className="field resize-none"
+                />
+              </Step>
+
+              <Step
+                n={6}
+                done={!!estimate.condition_id}
+                title="Cost estimate for the family"
+                right={<span className="font-mono text-[10.5px] text-pulse-300">real outcomes · optional</span>}
+                last
+              >
+                <CostEstimatePanel
+                  value={estimate}
+                  onChange={(v) => {
+                    if (v.severity !== estimate.severity) setSeverityTouched(true);
+                    setEstimate(v);
+                  }}
+                  wardType={selectedBed?.ward_type ?? null}
+                  deptId={selectedBed?.dept_id ?? null}
+                  patientIsChild={selectedPatientIsChild}
                 />
               </Step>
 

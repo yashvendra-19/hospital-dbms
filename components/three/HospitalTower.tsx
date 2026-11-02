@@ -11,6 +11,7 @@ export const STATUS_HEX: Record<string, string> = {
   Available: '#34d399',
   Occupied: '#fb7185',
   Sanitizing: '#fbbf24',
+  Reserved: '#38bdf8',
   'Out-Of-Service': '#64748b',
 };
 
@@ -174,6 +175,10 @@ function Pod({
       k = 0.6 + Math.exp(-phase * 9) * (critical ? 3.2 : 1.8);
     } else if (bed.operational_status === 'Sanitizing') {
       k = 0.5 + (Math.sin(t * 2.4) * 0.5 + 0.5) * 1.2;
+    } else if (bed.operational_status === 'Reserved') {
+      // ambulance strobe: two quick flashes every second
+      const p = t % 1;
+      k = 0.5 + (p < 0.08 || (p > 0.16 && p < 0.24) ? 3.4 : 0);
     } else if (bed.operational_status === 'Available') {
       k = 0.75;
     } else {
@@ -229,6 +234,7 @@ function Pod({
       </mesh>
 
       {critical && <Beacon />}
+      {bed.operational_status === 'Reserved' && <Beacon color="#38bdf8" speed={11} />}
       {bed.has_ventilator && (
         <mesh position={[0.5, 0.25, -0.5]}>
           <cylinderGeometry args={[0.05, 0.05, 0.5, 12]} />
@@ -248,6 +254,12 @@ function Pod({
             <div className="font-mono text-[10px] uppercase tracking-wider" style={{ color }}>
               {bed.operational_status} · {bed.ward_type}
             </div>
+            {bed.operational_status === 'Reserved' && bed.hold_alert_code && (
+              <div className="mt-1.5 border-t border-tint/[0.14] pt-1.5 text-[11px] text-sky-200">
+                Held for ambulance {bed.hold_alert_code}
+                {bed.hold_esi ? <span className="ml-1 font-mono text-sky-300">ESI {bed.hold_esi}</span> : null}
+              </div>
+            )}
             {occupied && bed.patient_name && (
               <div className="mt-1.5 border-t border-tint/[0.14] pt-1.5 text-[11px] text-fg2">
                 {bed.patient_name}
@@ -265,17 +277,17 @@ function Pod({
 }
 
 /** Pulsing vertical light shaft marking an ESI-1 patient. */
-function Beacon() {
+function Beacon({ color = '#ff3b5c', speed = 7 }: { color?: string; speed?: number }) {
   const mat = useRef<THREE.MeshBasicMaterial>(null);
   useFrame(({ clock }) => {
-    if (mat.current) mat.current.opacity = 0.25 + (Math.sin(clock.elapsedTime * 7) * 0.5 + 0.5) * 0.45;
+    if (mat.current) mat.current.opacity = 0.25 + (Math.sin(clock.elapsedTime * speed) * 0.5 + 0.5) * 0.45;
   });
   return (
     <mesh position={[0, 1.6, 0]}>
       <cylinderGeometry args={[0.06, 0.22, 3, 16, 1, true]} />
       <meshBasicMaterial
         ref={mat}
-        color="#ff3b5c"
+        color={color}
         transparent
         opacity={0.5}
         blending={THREE.AdditiveBlending}

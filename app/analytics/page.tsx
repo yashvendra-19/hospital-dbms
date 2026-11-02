@@ -46,7 +46,7 @@ const CONSTRAINTS = [
 export default function AnalyticsPage() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
-  const [data, setData] = useState<{ departmentCapacity: any[]; wardTypeDistribution: any[]; kpis: any } | null>(null);
+  const [data, setData] = useState<{ departmentCapacity: any[]; wardTypeDistribution: any[]; kpis: any; financeVisible?: boolean; realWorld?: any; estimateAccuracy?: any[] | null } | null>(null);
 
   const fetchAnalytics = async () => {
     setLoading(true);
@@ -109,18 +109,26 @@ export default function AnalyticsPage() {
         <MetricCard
           index={2}
           title="Gross billed revenue"
-          value={kpis ? Number(kpis.total_gross_billed) : null}
+          value={kpis && data?.financeVisible !== false ? Number(kpis.total_gross_billed) : null}
           prefix="₹"
-          subtitle={`${kpis?.settled_bills_count ?? 0} settled · ${kpis?.pending_bills_count ?? 0} pending`}
+          subtitle={
+            data?.financeVisible === false
+              ? 'Hidden: your role has no grant on billing'
+              : `${kpis?.settled_bills_count ?? 0} settled · ${kpis?.pending_bills_count ?? 0} pending`
+          }
           icon={IndianRupee}
           variant="violet"
         />
         <MetricCard
           index={3}
           title="Net patient collections"
-          value={kpis ? Number(kpis.total_net_payable) : null}
+          value={kpis && data?.financeVisible !== false ? Number(kpis.total_net_payable) : null}
           prefix="₹"
-          subtitle={`₹${Number(kpis?.total_insurance_claimed ?? 0).toLocaleString('en-IN')} insurance claimed`}
+          subtitle={
+            data?.financeVisible === false
+              ? 'Finance data stays with billing and admins'
+              : `₹${Number(kpis?.total_insurance_claimed ?? 0).toLocaleString('en-IN')} insurance claimed`
+          }
           icon={TrendingUp}
           variant="emerald"
         />
@@ -362,6 +370,101 @@ export default function AnalyticsPage() {
           </div>
         </motion.div>
       </div>
+
+      {data?.realWorld && <RealWorldSection rw={data.realWorld} accuracy={data.estimateAccuracy} />}
     </div>
+  );
+}
+
+/** Where the numbers come from: public datasets loaded into hospital_db. */
+function RealWorldSection({ rw, accuracy }: { rw: any; accuracy?: any[] | null }) {
+  const dir = rw.directory || {};
+  return (
+    <section className="mt-10">
+      <div className="mb-4 flex items-center gap-2">
+        <Database className="h-5 w-5 text-pulse-300" />
+        <h2 className="font-display text-xl font-bold text-fg">Real-world data inside hospital_db</h2>
+      </div>
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        {(rw.sources || []).map((src: any) => (
+          <a
+            key={src.key}
+            href={src.url}
+            target="_blank"
+            rel="noreferrer"
+            className="glass group rounded-2xl p-4 transition hover:border-pulse-400/30"
+          >
+            <div className="font-mono text-[10px] uppercase tracking-[0.18em] text-pulse-300">{src.key}</div>
+            <div className="mt-1 font-display text-sm font-bold text-fg">{src.title}</div>
+            <div className="text-[11px] text-fg3">{src.publisher}</div>
+            <div className="mt-3 font-display text-2xl font-bold text-fg">{Number(src.rows).toLocaleString('en-IN')} rows</div>
+            {src.rowsInSource && Number(src.rowsInSource) !== Number(src.rows) && (
+              <div className="text-[11px] text-fg2">sampled from {Number(src.rowsInSource).toLocaleString('en-IN')}</div>
+            )}
+            <p className="mt-2 text-[11px] leading-relaxed text-fg3">{src.notes}</p>
+            <div className="mt-2 truncate font-mono text-[9.5px] text-fg3" title={src.sha256}>
+              sha256 {String(src.sha256 || '').slice(0, 20)}… · {src.licence}
+            </div>
+          </a>
+        ))}
+      </div>
+      <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+        <div className="glass rounded-2xl p-4">
+          <div className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-fg3">National Hospital Directory</div>
+          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+            {[
+              ['hospitals', dir.hospitals],
+              ['states & UTs', dir.states],
+              ['emergency-capable', dir.erCapable],
+              ['geo-located', dir.withCoordinates],
+              ['in our district', dir.sameDistrict],
+              ['ER-capable nearby', dir.sameDistrictEr],
+            ].map(([l, v]) => (
+              <div key={l as string} className="rounded-xl border border-tint/[0.08] bg-ground/50 p-2.5">
+                <div className="font-display text-lg font-bold text-fg">{Number(v ?? 0).toLocaleString('en-IN')}</div>
+                <div className="text-[10px] text-fg3">{l}</div>
+              </div>
+            ))}
+          </div>
+          {accuracy && (
+            <div className="mt-4 border-t border-tint/[0.08] pt-3 text-xs text-fg2">
+              <span className="font-semibold text-fg">Estimate honesty: </span>
+              {accuracy.length === 0
+                ? 'no estimates given yet.'
+                : accuracy.map((a: any) => `${a.outcome}: ${a.n}`).join(' · ')}
+            </div>
+          )}
+        </div>
+        <div className="glass rounded-2xl p-4">
+          <div className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-fg3">Real length of stay (NY SPARCS 2021, all severities)</div>
+          <table className="mt-3 w-full text-xs">
+            <thead className="font-mono text-[10px] uppercase text-fg3">
+              <tr>
+                <th className="pb-1.5 text-left font-medium">Condition</th>
+                <th className="pb-1.5 text-right font-medium">Stays</th>
+                <th className="pb-1.5 text-right font-medium">Median</th>
+                <th className="pb-1.5 text-right font-medium">P90</th>
+                <th className="pb-1.5 text-right font-medium">Died</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(rw.top_conditions || []).map((c: any) => (
+                <tr key={c.condition} className="border-t border-tint/[0.06]">
+                  <td className="py-1.5 text-fg">
+                    <span className="mr-1.5 font-mono text-[10px] text-fg3">{c.dept_code}</span>
+                    {c.condition}
+                  </td>
+                  <td className="py-1.5 text-right font-mono text-fg2">{c.cases}</td>
+                  <td className="py-1.5 text-right font-mono text-pulse-300">{Number(c.los_median)}d</td>
+                  <td className="py-1.5 text-right font-mono text-fg2">{Number(c.los_p90)}d</td>
+                  <td className="py-1.5 text-right font-mono text-fg2">{Number(c.mortality_pct).toFixed(1)}%</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <p className="mt-2 text-[10.5px] text-fg3">percentile_cont() over historical_discharges, stored in mv_condition_benchmarks.</p>
+        </div>
+      </div>
+    </section>
   );
 }

@@ -17,6 +17,7 @@ export interface StaffSession {
   mode: AccessMode;
   expiresAt: string;
   reason: string | null;
+  doctorId: number | null;
 }
 
 const hashToken = (token: string) => createHash('sha256').update(token).digest('hex');
@@ -59,7 +60,7 @@ export async function getSession(request: NextRequest): Promise<StaffSession | n
   if (!token || token.length < 20) return null;
   const { rows } = await query(
     `SELECT s.session_id, s.access_mode, s.expires_at, s.break_glass_reason,
-            a.staff_id, a.staff_code, a.full_name, a.staff_role
+            a.staff_id, a.staff_code, a.full_name, a.staff_role, a.doctor_id
      FROM staff_sessions s
      JOIN staff_accounts a ON a.staff_id = s.staff_id
      WHERE s.token_hash = $1
@@ -79,6 +80,7 @@ export async function getSession(request: NextRequest): Promise<StaffSession | n
     mode: r.access_mode,
     expiresAt: new Date(r.expires_at).toISOString(),
     reason: r.break_glass_reason,
+    doctorId: r.doctor_id ?? null,
   };
 }
 

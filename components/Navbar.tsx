@@ -4,17 +4,21 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { motion } from 'framer-motion';
-import { BarChart3, BedDouble, Database, LogOut, PhoneCall, Receipt, ShieldAlert, ShieldCheck, UserPlus } from 'lucide-react';
+import { Ambulance, BarChart3, BedDouble, Database, Fingerprint, LogOut, PhoneCall, Receipt, ScanEye, ShieldAlert, UserPlus } from 'lucide-react';
 import FloatingDock, { DockItem } from './fx/FloatingDock';
 import EcgLine from './fx/EcgLine';
 import ShinyText from './fx/ShinyText';
-import { ROLE_STYLE, initials, useSession } from './auth/SessionContext';
+import { DB_ROLE_OF, ROLE_STYLE, initials, useSession } from './auth/SessionContext';
+import { useLive } from './LiveContext';
 
 export const NAV_ITEMS: DockItem[] = [
   { href: '/', label: 'Bed Grid & Triage', icon: BedDouble, hint: '3D digital twin' },
   { href: '/admissions', label: 'Emergency Admission', icon: UserPlus, hint: 'Triage intake' },
+  { href: '/ambulance', label: 'Golden Hour Desk', icon: Ambulance, hint: 'Ambulance pre-alerts' },
   { href: '/billing', label: 'Discharge & Billing', icon: Receipt, hint: 'Invoices' },
-  { href: '/analytics', label: 'Capacity Analytics', icon: BarChart3, hint: 'SQL aggregates' },
+  { href: '/analytics', label: 'Capacity Analytics', icon: BarChart3, hint: 'Real-world data' },
+  { href: '/privacy', label: 'Privacy Lens', icon: ScanEye, hint: 'Row-level security' },
+  { href: '/integrity', label: 'Integrity Ledger', icon: Fingerprint, hint: 'SHA-256 audit chain' },
 ];
 
 /** Glass top bar (brand, live DB status, clock) + floating dock navigation. */
@@ -23,6 +27,21 @@ export default function Navbar() {
   const [time, setTime] = useState('');
   const { session, logout } = useSession();
   const [left, setLeft] = useState<number | null>(null);
+  const { tick, connected } = useLive();
+  const [incoming, setIncoming] = useState<number | null>(null);
+
+  // Incoming ambulance count, refreshed whenever PostgreSQL pushes an event
+  useEffect(() => {
+    if (!session) return;
+    let alive = true;
+    fetch('/api/stats', { cache: 'no-store' })
+      .then((r) => r.json())
+      .then((d) => alive && d.success && setIncoming(d.stats.incomingAmbulances))
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [session, tick, pathname]);
 
   // Break-glass sessions count down and sign out at zero.
   useEffect(() => {
@@ -86,21 +105,36 @@ export default function Navbar() {
           )}
 
           <div className="flex items-center gap-2 sm:gap-3">
-            <span className="hidden items-center gap-2 rounded-full border border-emerald-400/25 bg-emerald-400/[0.07] px-3 py-1 font-mono text-[10.5px] text-emerald-300 md:inline-flex">
+            <span
+              title={connected ? 'Subscribed to PostgreSQL LISTEN mediresource_live' : 'Reconnecting to the live feed'}
+              className={`hidden items-center gap-2 rounded-full border px-3 py-1 font-mono text-[10.5px] md:inline-flex ${
+                connected ? 'border-emerald-400/25 bg-emerald-400/[0.07] text-emerald-300' : 'border-amber-300/25 bg-amber-300/[0.06] text-amber-200'
+              }`}
+            >
               <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping2 rounded-full bg-emerald-400" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
+                {connected && <span className="absolute inline-flex h-full w-full animate-ping2 rounded-full bg-emerald-400" />}
+                <span className={`relative inline-flex h-2 w-2 rounded-full ${connected ? 'bg-emerald-400' : 'bg-amber-300'}`} />
               </span>
               <Database className="h-3 w-3" />
-              hospital_db · pool live
+              {connected ? 'LISTEN live' : 'connecting'}
             </span>
-            <span
-              className="hidden items-center gap-1.5 rounded-full border border-amber-300/20 bg-amber-300/[0.06] px-3 py-1 font-mono text-[10.5px] text-amber-200 2xl:inline-flex"
-              title="PostgreSQL GiST exclusion constraint"
-            >
-              <ShieldCheck className="h-3 w-3" />
-              ex_no_double_bed_booking
-            </span>
+            {session && (
+              <span
+                className="hidden items-center gap-1.5 rounded-full border border-plasma-400/25 bg-plasma-500/[0.07] px-3 py-1 font-mono text-[10.5px] text-plasma-400 2xl:inline-flex"
+                title="Every query runs as this PostgreSQL role, so grants and row-level security apply"
+              >
+                db role · {DB_ROLE_OF[session.role]}
+              </span>
+            )}
+            {incoming ? (
+              <Link
+                href="/ambulance"
+                className="inline-flex items-center gap-1.5 rounded-full border border-sky-400/40 bg-sky-500/15 px-3 py-1 text-[11px] font-semibold text-sky-100 transition hover:bg-sky-500/25"
+              >
+                <Ambulance className="h-3.5 w-3.5 animate-pulse" />
+                {incoming} inbound
+              </Link>
+            ) : null}
             <a
               href="tel:108"
               className="inline-flex items-center gap-1.5 rounded-full border border-rose-400/30 bg-rose-500/10 px-3 py-1 text-[11px] font-semibold text-rose-200 transition hover:bg-rose-500/20"

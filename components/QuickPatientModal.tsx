@@ -6,6 +6,7 @@ import { AlertCircle, UserPlus } from 'lucide-react';
 import { useToast } from './ToastContext';
 import Modal from './fx/Modal';
 import Segmented from './fx/Segmented';
+import { useSession } from './auth/SessionContext';
 
 interface QuickPatientModalProps {
   isOpen: boolean;
@@ -35,7 +36,11 @@ export default function QuickPatientModal({ isOpen, onClose, onPatientCreated }:
     primary_phone: '',
     emergency_contact_name: '',
     emergency_contact_phone: '',
+    privacy_level: 'standard',
+    restriction_reason: '',
   });
+  const { session } = useSession();
+  const canRestrict = session?.role === 'Doctor' || session?.role === 'Admin';
   const set = (k: keyof typeof formData) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setFormData({ ...formData, [k]: e.target.value });
   const minor = isMinor(formData.dob);
@@ -198,6 +203,35 @@ export default function QuickPatientModal({ isOpen, onClose, onPatientCreated }:
             </div>
           </div>
         </div>
+
+        {canRestrict && (
+          <div className="rounded-xl border border-plasma-400/25 bg-plasma-500/[0.05] p-3">
+            <label className="flex cursor-pointer items-center gap-2 text-xs font-semibold text-fg">
+              <input
+                type="checkbox"
+                className="h-4 w-4 accent-violet-400"
+                checked={formData.privacy_level === 'restricted'}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    privacy_level: e.target.checked ? 'restricted' : 'standard',
+                    restriction_reason: e.target.checked ? formData.restriction_reason || 'Medico-legal case (MLC)' : '',
+                  })
+                }
+              />
+              Restricted record (visible only to the treating doctor, admins and break-glass)
+            </label>
+            {formData.privacy_level === 'restricted' && (
+              <select value={formData.restriction_reason} onChange={set('restriction_reason')} className="field mt-2 text-xs">
+                <option>Medico-legal case (MLC)</option>
+                <option>VIP / public figure</option>
+                <option>Sensitive diagnosis (HIV, psychiatric)</option>
+                <option>Survivor of violence</option>
+              </select>
+            )}
+            <p className="mt-1.5 text-[10.5px] text-fg3">Enforced by the RLS policy pol_patients_read; nurses cannot create restricted records.</p>
+          </div>
+        )}
 
         <div className="flex justify-end gap-3 pt-2">
           <button type="button" onClick={onClose} className="rounded-xl px-4 py-2.5 text-xs font-semibold text-fg2 transition hover:bg-tint/5 hover:text-fg">

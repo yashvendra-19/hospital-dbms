@@ -29,6 +29,9 @@ export const ROLE_STYLE = {
 
 export type Role = keyof typeof ROLE_STYLE;
 
+/** PostgreSQL role each staff role runs as (SET LOCAL ROLE in lib/db.ts). */
+export const DB_ROLE_OF: Record<Role, string> = { Doctor: 'mr_doctor', Nurse: 'mr_nurse', Billing: 'mr_billing', Admin: 'mr_admin' };
+
 export function roleFromCode(code: string): Role | null {
   const p = code.trim().toUpperCase().slice(0, 3);
   return (Object.keys(ROLE_STYLE) as Role[]).find((r) => ROLE_STYLE[r].prefix === p) ?? null;

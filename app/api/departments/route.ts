@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth';
-import { query } from '@/lib/db';
+import { asStaff } from '@/lib/db';
+import { dbError } from '@/lib/api';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +9,7 @@ export async function GET(request: NextRequest) {
   const auth = await requireSession(request);
   if (auth instanceof NextResponse) return auth;
   try {
-    const { rows } = await query(`
+    const rows = await asStaff(auth, async (db) => (await db.query(`
       SELECT 
         d.dept_id,
         d.dept_code,
@@ -23,13 +24,10 @@ export async function GET(request: NextRequest) {
       LEFT JOIN wards_beds b ON d.dept_id = b.dept_id
       GROUP BY d.dept_id
       ORDER BY d.dept_id
-    `);
+    `)).rows);
 
     return NextResponse.json({ success: true, departments: rows });
   } catch (error: any) {
-    return NextResponse.json(
-      { success: false, error: error.message || 'Failed to fetch departments' },
-      { status: 500 }
-    );
+    return dbError(error, 'Failed to fetch departments', auth);
   }
 }

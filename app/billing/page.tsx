@@ -10,6 +10,7 @@ import PageHeader, { GhostButton } from '@/components/PageHeader';
 import MetricCard from '@/components/MetricCard';
 import Segmented from '@/components/fx/Segmented';
 import TriageBadge from '@/components/TriageBadge';
+import DbLock from '@/components/DbLock';
 
 const inr = (n: any) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
 
@@ -21,6 +22,7 @@ function BillingTerminalContent() {
   const [loading, setLoading] = useState(true);
   const [activeInpatients, setActiveInpatients] = useState<InpatientBillingItem[]>([]);
   const [pastInvoices, setPastInvoices] = useState<any[]>([]);
+  const [invoiceLock, setInvoiceLock] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState<'active' | 'invoices'>('active');
   const [selectedInpatient, setSelectedInpatient] = useState<InpatientBillingItem | null>(null);
@@ -44,6 +46,7 @@ function BillingTerminalContent() {
         }
       }
       if (invData.success) setPastInvoices(invData.invoices);
+      setInvoiceLock(invRes.status === 403 ? invData : null);
     } catch (err: any) {
       toast({ type: 'error', title: 'Billing Load Error', message: err.message || 'Failed to fetch billing records.' });
     } finally {
@@ -105,6 +108,18 @@ function BillingTerminalContent() {
         <MetricCard index={2} title="Gross billed" value={loading ? null : grossBilled} prefix="₹" icon={IndianRupee} variant="violet" badge={`${pastInvoices.length} invoices`} />
         <MetricCard index={3} title="Net patient payable" value={loading ? null : netCollected} prefix="₹" icon={Wallet} variant="emerald" badge="After ins./disc." />
       </div>
+
+      {invoiceLock && (
+        <div className="mt-6">
+          <DbLock
+            compact
+            what="Bills and invoices"
+            error={`${invoiceLock.error} Doctors and nurses can see who is in a bed, but PostgreSQL will roll back any discharge that tries to INSERT a bill.`}
+            role={invoiceLock.role}
+            dbRole={invoiceLock.dbRole}
+          />
+        </div>
+      )}
 
       <div className="mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <Segmented
@@ -174,7 +189,7 @@ function BillingTerminalContent() {
                           <Stethoscope className="h-3.5 w-3.5 text-fg3" />
                           <span className="truncate">{item.doctor_name}</span>
                         </div>
-                        <div className="truncate text-[11px] italic text-fg3">{item.admission_diagnosis}</div>
+                        <div className="truncate text-[11px] italic text-fg3">{item.admission_diagnosis ?? "Diagnosis hidden by column grant"}</div>
                       </div>
                       <div className="lg:col-span-2">
                         <Lbl>Length of stay</Lbl>
@@ -274,6 +289,29 @@ function BillingTerminalContent() {
                             }
                           />
                         </div>
+                        {(inv.estimate_outcome || inv.seal_seq) && (
+                          <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                            {inv.estimate_outcome && (
+                              <span
+                                className={`chip ${
+                                  inv.estimate_outcome === 'Within range'
+                                    ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-300'
+                                    : inv.estimate_outcome === 'Above range'
+                                      ? 'border-rose-400/30 bg-rose-500/10 text-rose-300'
+                                      : 'border-sky-400/30 bg-sky-500/10 text-sky-300'
+                                }`}
+                                title={`${inv.estimate_code}: ${inr(inv.est_low_inr)} – ${inr(inv.est_high_inr)}`}
+                              >
+                                {inv.estimate_code} · {inv.estimate_outcome}
+                              </span>
+                            )}
+                            {inv.seal_seq && (
+                              <span className="chip border-plasma-400/30 bg-plasma-500/10 font-mono text-plasma-400" title={inv.seal_hash}>
+                                seal #{inv.seal_seq} · {String(inv.seal_hash).slice(0, 10)}
+                              </span>
+                            )}
+                          </div>
+                        )}
                         <div className="mt-4 flex items-end justify-between border-t border-dashed border-tint/[0.14] pt-3">
                           <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-fg3">Net payable</span>
                           <span className="font-display text-2xl font-bold text-emerald-300">
