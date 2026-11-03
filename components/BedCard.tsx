@@ -144,7 +144,7 @@ export default function BedCard({ bed, onStatusChange, highlight }: BedCardProps
     <TiltCard className="h-full">
       <div
         id={`bed-${bed.bed_id}`}
-        className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-ink-900/80 backdrop-blur-xl transition-shadow duration-300 ${
+        className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border bg-ink-900/95 transition-shadow duration-300 ${
           highlight ? 'ring-2 ring-pulse-300 ring-offset-2 ring-offset-ink-950' : ''
         }`}
         style={{

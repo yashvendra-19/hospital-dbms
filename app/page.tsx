@@ -474,15 +474,14 @@ export default function DashboardPage() {
                 <motion.div
                   key={bed.bed_id}
                   layout
-                  initial={{ opacity: 0, y: 30, scale: 0.92, filter: 'blur(6px)' }}
-                  animate={{ opacity: 1, y: 0, scale: 1, filter: 'blur(0px)' }}
-                  exit={{ opacity: 0, scale: 0.85, filter: 'blur(6px)', transition: { duration: 0.2 } }}
+                  initial={{ opacity: 0, y: 30, scale: 0.92 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.85, transition: { duration: 0.2 } }}
                   transition={{
                     type: 'spring',
                     stiffness: 170,
                     damping: 20,
                     delay: Math.min(i, 12) * 0.035,
-                    filter: { duration: 0.4, delay: Math.min(i, 12) * 0.035 },
                   }}
                 >
                   <BedCard bed={bed} onStatusChange={handleBedStatusUpdate} highlight={focusBed === bed.bed_id} />

@@ -58,22 +58,20 @@ export default function Modal({
             role="dialog"
             aria-modal="true"
             aria-labelledby={labelledBy}
-            initial={{ opacity: 0, scale: 0.9, y: 30, rotateX: 14, filter: 'blur(8px)' }}
+            initial={{ opacity: 0, scale: 0.9, y: 30, rotateX: 14 }}
             animate={{
               opacity: 1,
               scale: 1,
               y: 0,
               rotateX: 0,
-              filter: 'blur(0px)',
               x: shake ? [0, -14, 12, -9, 7, -4, 0] : 0,
             }}
-            exit={{ opacity: 0, scale: 0.95, y: 20, filter: 'blur(6px)' }}
+            exit={{ opacity: 0, scale: 0.95, y: 20 }}
             transition={{
               type: 'spring',
               stiffness: 260,
               damping: 24,
               x: { duration: 0.5, delay: 0.15 },
-              filter: { duration: 0.35 },
             }}
             style={{ transformPerspective: 1200 }}
             className={`relative my-auto w-full ${className}`}

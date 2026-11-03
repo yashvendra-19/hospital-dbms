@@ -54,10 +54,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
               <motion.div
                 key={t.id}
                 layout
-                initial={{ opacity: 0, x: 80, scale: 0.9, filter: 'blur(6px)' }}
-                animate={{ opacity: 1, x: 0, scale: 1, filter: 'blur(0px)' }}
+                initial={{ opacity: 0, x: 80, scale: 0.9 }}
+                animate={{ opacity: 1, x: 0, scale: 1 }}
                 exit={{ opacity: 0, x: 80, scale: 0.92, transition: { duration: 0.2 } }}
-                transition={{ type: 'spring', stiffness: 300, damping: 26, filter: { duration: 0.3 } }}
+                transition={{ type: 'spring', stiffness: 300, damping: 26 }}
                 role="status"
                 className="pointer-events-auto relative overflow-hidden rounded-xl border bg-ink-900/90 p-3.5 pr-9 shadow-2xl backdrop-blur-2xl"
                 style={{ borderColor: `rgba(${c.rgb},0.35)`, boxShadow: '0 18px 40px -16px rgba(0,0,0,0.85)' }}

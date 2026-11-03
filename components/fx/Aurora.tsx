@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 
 /**
  * Dark blue backdrop: soft cyan and violet aurora washes, a perspective grid
@@ -8,16 +8,17 @@ import { useEffect } from 'react';
  * contrast (Aceternity "Aurora Background" / React Bits "Aurora").
  */
 export default function Aurora() {
+  const spot = useRef<HTMLDivElement>(null);
   useEffect(() => {
     let raf = 0;
+    // Move one composited layer instead of restyling the whole page on every mouse move
     const onMove = (e: PointerEvent) => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        document.documentElement.style.setProperty('--mx', `${e.clientX}px`);
-        document.documentElement.style.setProperty('--my', `${e.clientY}px`);
+        if (spot.current) spot.current.style.transform = `translate3d(${e.clientX - 560}px, ${e.clientY - 560}px, 0)`;
       });
     };
-    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointermove', onMove, { passive: true });
     return () => {
       window.removeEventListener('pointermove', onMove);
       cancelAnimationFrame(raf);
@@ -27,9 +28,9 @@ export default function Aurora() {
   return (
     <div aria-hidden className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-ground">
       {/* Aurora washes: electric cyan and violet */}
-      <div className="absolute -left-[10vw] -top-[25vh] h-[70vh] w-[60vw] animate-aurora1 rounded-full bg-[radial-gradient(closest-side,rgba(46,230,245,0.11),transparent)] blur-3xl" />
-      <div className="absolute right-[-15vw] top-[5vh] h-[75vh] w-[55vw] animate-aurora2 rounded-full bg-[radial-gradient(closest-side,rgba(148,116,255,0.10),transparent)] blur-3xl" />
-      <div className="absolute bottom-[-35vh] left-[25vw] h-[60vh] w-[55vw] animate-aurora1 rounded-full bg-[radial-gradient(closest-side,rgba(59,130,246,0.07),transparent)] blur-3xl [animation-delay:-9s]" />
+      <div className="absolute -left-[10vw] -top-[25vh] h-[70vh] w-[60vw] animate-aurora1 rounded-full bg-[radial-gradient(closest-side,rgba(46,230,245,0.11),transparent)] will-change-transform" />
+      <div className="absolute right-[-15vw] top-[5vh] h-[75vh] w-[55vw] animate-aurora2 rounded-full bg-[radial-gradient(closest-side,rgba(148,116,255,0.10),transparent)] will-change-transform" />
+      <div className="absolute bottom-[-35vh] left-[25vw] h-[60vh] w-[55vw] animate-aurora1 rounded-full bg-[radial-gradient(closest-side,rgba(59,130,246,0.07),transparent)] will-change-transform [animation-delay:-9s]" />
 
       {/* Perspective grid floor */}
       <div
@@ -58,8 +59,9 @@ export default function Aurora() {
 
       {/* Cursor spotlight */}
       <div
-        className="absolute inset-0"
-        style={{ background: 'radial-gradient(560px circle at var(--mx) var(--my), rgba(46,230,245,0.05), transparent 45%)' }}
+        ref={spot}
+        className="absolute left-0 top-0 h-[1120px] w-[1120px] will-change-transform"
+        style={{ background: 'radial-gradient(closest-side, rgba(46,230,245,0.05), transparent 80%)', transform: 'translate3d(-2000px,-2000px,0)' }}
       />
     </div>
   );

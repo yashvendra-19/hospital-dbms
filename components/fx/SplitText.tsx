@@ -31,13 +31,12 @@ export default function SplitText({ text, accent = [], className = '', delay = 0
             aria-hidden
             className={`inline-block ${accent.includes(w) ? 'text-gradient' : ''}`}
             variants={{
-              hidden: { opacity: 0, y: '0.6em', filter: 'blur(12px)', rotateX: -40 },
+              hidden: { opacity: 0, y: '0.6em', rotateX: -40 },
               show: {
                 opacity: 1,
                 y: 0,
-                filter: 'blur(0px)',
                 rotateX: 0,
-                transition: { type: 'spring', damping: 18, stiffness: 140, filter: { duration: 0.5, ease: 'easeOut' } },
+                transition: { type: 'spring', damping: 18, stiffness: 140 },
               },
             }}
           >

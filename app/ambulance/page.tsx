@@ -653,7 +653,7 @@ function AlertCard({
       initial={{ opacity: 0, x: 30, scale: 0.97 }}
       animate={{ opacity: 1, x: 0, scale: 1 }}
       exit={{ opacity: 0, x: -30, scale: 0.97 }}
-      className="relative overflow-hidden rounded-2xl border border-sky-400/25 bg-ink-900/85 p-4 backdrop-blur-xl"
+      className="relative overflow-hidden rounded-2xl border border-sky-400/25 bg-ink-900/95 p-4"
     >
       <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-sky-300 to-transparent" />
       <div className="flex gap-4">

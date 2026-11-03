@@ -44,33 +44,13 @@ export default function EcgLine({
         <mask id={`m-${id}`}>
           <rect width={viewW} height="50" fill={`url(#fade-${id})`} />
         </mask>
-        <filter id={`glow-${id}`} x="-10%" y="-60%" width="120%" height="220%">
-          <feGaussianBlur stdDeviation="1.8" result="b" />
-          <feMerge>
-            <feMergeNode in="b" />
-            <feMergeNode in="SourceGraphic" />
-          </feMerge>
-        </filter>
       </defs>
-      <g mask={`url(#m-${id})`} filter={`url(#glow-${id})`}>
-        <path
-          d={d}
-          fill="none"
-          stroke={color}
-          strokeWidth={strokeWidth}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          vectorEffect="non-scaling-stroke"
-        >
-          <animateTransform
-            attributeName="transform"
-            type="translate"
-            from="0 0"
-            to={`-${viewW} 0`}
-            dur={`${dur}s`}
-            repeatCount="indefinite"
-          />
-        </path>
+      <g mask={`url(#m-${id})`}>
+        <g className="ecg-scroll" style={{ animationDuration: `${dur}s`, ['--ecg-w' as any]: `-${viewW}px` }}>
+          {/* soft glow: a wider, faint copy of the trace instead of a blur filter */}
+          <path d={d} fill="none" stroke={color} strokeOpacity={0.25} strokeWidth={strokeWidth * 3} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+          <path d={d} fill="none" stroke={color} strokeWidth={strokeWidth} strokeLinecap="round" strokeLinejoin="round" vectorEffect="non-scaling-stroke" />
+        </g>
       </g>
     </svg>
   );

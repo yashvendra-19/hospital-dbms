@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useRef, useState } from 'react';
+import { useVisible } from './useVisible';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { Edges, Html, OrbitControls, RoundedBox, Sparkles } from '@react-three/drei';
@@ -47,15 +48,19 @@ export default function HospitalTower({ beds, onPick }: TowerProps) {
     return list;
   }, [beds]);
 
+  const wrap = useRef<HTMLDivElement>(null);
+  const visible = useVisible(wrap);
   const maxPods = Math.max(3, ...floors.map((f) => f.beds.length));
   const slabW = maxPods * POD_GAP + 1.1;
   const towerH = Math.max(1, floors.length) * FLOOR_H;
 
   return (
+    <div ref={wrap} className="h-full w-full">
     <Canvas
-      dpr={[1, 1.75]}
+      dpr={[1, 1.25]}
+      frameloop={visible ? 'always' : 'never'}
       camera={{ position: [9.2, towerH * 0.9 + 3, 11.2], fov: 36 }}
-      gl={{ antialias: true, powerPreference: 'high-performance' }}
+      gl={{ antialias: false, powerPreference: 'high-performance', stencil: false, depth: true }}
     >
       <color attach="background" args={['#04060c']} />
       <fog attach="fog" args={['#04060c', 13, 28]} />
@@ -72,7 +77,7 @@ export default function HospitalTower({ beds, onPick }: TowerProps) {
         <Ground />
       </group>
 
-      <Sparkles count={70} scale={[12, 9, 12]} size={2.2} speed={0.35} color="#7af7ff" opacity={0.6} />
+      <Sparkles count={36} scale={[12, 9, 12]} size={2.2} speed={0.35} color="#7af7ff" opacity={0.6} />
 
       <OrbitControls
         enablePan={false}
@@ -85,11 +90,13 @@ export default function HospitalTower({ beds, onPick }: TowerProps) {
         enableDamping
       />
 
-      <EffectComposer>
-        <Bloom mipmapBlur luminanceThreshold={0.55} luminanceSmoothing={0.2} intensity={1.15} />
+      {/* half-resolution bloom, no MSAA: same glow for a fraction of the GPU cost */}
+      <EffectComposer multisampling={0} enableNormalPass={false}>
+        <Bloom mipmapBlur levels={5} resolutionScale={0.5} luminanceThreshold={0.55} luminanceSmoothing={0.2} intensity={1.15} />
         <Vignette eskil={false} offset={0.2} darkness={0.75} />
       </EffectComposer>
     </Canvas>
+    </div>
   );
 }
 

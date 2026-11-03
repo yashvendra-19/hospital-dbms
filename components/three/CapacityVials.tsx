@@ -3,6 +3,7 @@
 import { useRef } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
+import { useVisible } from './useVisible';
 import { Html, Sparkles } from '@react-three/drei';
 import { Bloom, EffectComposer } from '@react-three/postprocessing';
 
@@ -22,10 +23,18 @@ const levelColor = (p: number) => (p >= 80 ? '#fb7185' : p >= 50 ? '#fbbf24' : p
 
 /** Departments as IV-style glass vials; liquid level = bed occupancy %. */
 export default function CapacityVials({ data }: { data: VialDatum[] }) {
+  const wrap = useRef<HTMLDivElement>(null);
+  const visible = useVisible(wrap);
   const gap = 1.7;
   const startX = -((data.length - 1) * gap) / 2;
   return (
-    <Canvas dpr={[1, 1.75]} camera={{ position: [0, 0.6, 10.5], fov: 30 }}>
+    <div ref={wrap} className="h-full w-full">
+    <Canvas
+      dpr={[1, 1.25]}
+      frameloop={visible ? 'always' : 'never'}
+      gl={{ antialias: false, powerPreference: 'high-performance', stencil: false }}
+      camera={{ position: [0, 0.6, 10.5], fov: 30 }}
+    >
       <color attach="background" args={['#04060c']} />
       <ambientLight intensity={0.5} />
       <directionalLight position={[3, 6, 5]} intensity={1.2} />
@@ -39,11 +48,12 @@ export default function CapacityVials({ data }: { data: VialDatum[] }) {
           <meshStandardMaterial color="#0a1220" roughness={0.4} metalness={0.6} />
         </mesh>
       </Sway>
-      <Sparkles count={40} scale={[9, 5, 4]} size={2} speed={0.4} color="#b79bff" />
-      <EffectComposer>
-        <Bloom mipmapBlur luminanceThreshold={0.6} intensity={0.9} />
+      <Sparkles count={24} scale={[9, 5, 4]} size={2} speed={0.4} color="#b79bff" />
+      <EffectComposer multisampling={0} enableNormalPass={false}>
+        <Bloom mipmapBlur levels={5} resolutionScale={0.5} luminanceThreshold={0.6} intensity={0.9} />
       </EffectComposer>
     </Canvas>
+    </div>
   );
 }
 
